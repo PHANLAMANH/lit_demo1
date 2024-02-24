@@ -1,12 +1,11 @@
-import hashlib
 from secrets import token_bytes
-import string
-import rsa
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
-
+from ecies import encrypt
+import pickle
+from chacha20poly1305 import ChaCha20Poly1305
 
 HASH_FUNC = "SHA256"
 IdDP = 'hcmus'
@@ -47,9 +46,8 @@ def img_to_bin(path):
     return image_bin
 
 def hash(bin):
-    h = hashlib.new(HASH_FUNC)
-    h.update(bin)
-    return h.digest()
+    hash_object = SHA256.new(data=bin)
+    return hash_object.digest()
 
 def AES_encrypt(data, key):
     cipher = AES.new(key, AES.MODE_EAX)
@@ -58,31 +56,67 @@ def AES_encrypt(data, key):
     EMD = nonce + cipher_text + mac
     return EMD
 
+def ChaCha20Poly1305_encrypt(data, key):
+    cip = ChaCha20Poly1305(key)
+    nonce = token_bytes(12)
+    ciphertext = cip.encrypt(nonce, data)
+    return ciphertext + nonce
+
 def get_rsa_keys():
-    with open("public.pem", "rb") as f:
-        public_key = rsa.PublicKey.load_pkcs1(f.read())
-    with open("private.pem", "rb") as f:
-        private_key = rsa.PrivateKey.load_pkcs1(f.read())
+    with open("privatekey.pem", "rb") as f:
+        data = f.read()
+        private_key = RSA.import_key(data)
+    with open("publickey.pem", "rb") as f:
+        data = f.read()
+        public_key = RSA.import_key(data)
+    return public_key, private_key
+
+def get_ecc_keys():
+    public_key = open("ecc_publickey.pem", "r").read()
+    private_key = open("ecc_privatekey.pem", "r").read()
     return public_key, private_key
 
 def main():
     path = "image.jpg"
     img_bin = img_to_bin(path)
+    public_key, _ = get_ecc_keys()
+
+    #Step 2
     IdMD = hash(img_bin)
+
+    #Step 3
     AES_key = token_bytes(16)
+    # CCP_key = token_bytes(32)
+
+    #Step 4
     EMD = AES_encrypt(img_bin, AES_key)
-    with open("EMD", "wb") as f:
-        f.write(EMD)
-    public_key, _ = get_rsa_keys()
-    _DPInfo = IdDP.encode() + AES_key 
-    print(len(_DPInfo))
-    DPInfo = rsa.encrypt(_DPInfo, public_key)
+    # EMD = ChaCha20Poly1305_encrypt(img_bin, CCP_key)
+    # print(EMD)
+
+    #Step 5
+    _DPInfo = IdDP.encode() + AES_key
+    # _DPInfo = IdDP.encode() + CCP_key
+    DPInfo = encrypt(public_key, _DPInfo)
+
+    #Step 6
     _EId = DPInfo + IdMD
-    print(len(DPInfo))
-    EId = rsa.encrypt(_EId, public_key)
-    
+    EId = encrypt(public_key, _EId)
+    print(EId)
 
+    #Step 7
+    SD = group_sig.sign_message(EMD, IdDP)
 
+    #Step 8 
+    CERT = {
+        "SD": SD,
+        "EId": EId
+    }
+
+    #Step 9
+    open("EMD.bin", "wb").write(EMD)
+    open("DPInfo.bin", "wb").write(DPInfo)
+    with open("CERT.bin", "wb") as f:
+        pickle.dump(CERT, f)
 
 if __name__ == "__main__":
     main()
