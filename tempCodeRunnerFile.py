@@ -1,0 +1,1 @@
+arweave_client = initialize_arweave()
