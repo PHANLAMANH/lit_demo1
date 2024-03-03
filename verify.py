@@ -4,7 +4,34 @@ from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
 from ecies import encrypt, decrypt
+import os
 import pickle
+
+class GroupSignature:
+    def __init__(self):
+        with open("group_signature/manager/private_key.pem", "rb") as f:
+            data = f.read()
+            self.group_manager_private_key = RSA.import_key(data)
+        with open("group_signature/manager/public_key.pem", "rb") as f:
+            data = f.read()
+            self.group_manager_public_key = RSA.import_key(data)
+
+        self.group_members = os.listdir("group_signature/members")
+
+    def sign_message(self, message, member_id):
+        if member_id not in self.group_members:
+            raise ValueError("Member ID not found")
+        hash_obj = SHA256.new(message)
+        signature = pkcs1_15.new(self.group_manager_private_key).sign(hash_obj)
+        return signature
+
+    def verify_signature(self, message, signature):
+        hash_obj = SHA256.new(message)
+        try:
+            pkcs1_15.new(self.group_manager_public_key).verify(hash_obj, signature)
+            return True
+        except (ValueError, TypeError):
+            return False
 
 def AES_decrypt(EMD, key):
     nonce_size = 16
@@ -34,7 +61,9 @@ def get_ecc_keys():
     private_key = open("ecc_privatekey.pem", "r").read()
     return public_key, private_key
 
-def main():
+group_sig = GroupSignature()
+
+def verify():
     EMD = open("EMD.bin", "rb").read()
     DPInfo = open("DPInfo.bin", "rb").read()
     with open("CERT.bin", "rb") as f:
@@ -55,16 +84,15 @@ def main():
     #Step 4
     IdMD = hash(MD)
     
-    #Step 5
+    #Step 5 Verify
     _EId = DPInfo + IdMD
-    print(_EId)
-    if encrypt(public_key, _EId) != CERT["EId"]:
-        print("Verification failed!")
-        return
     
-        
+    #Step 6: Verify Group Signature
 
-
+    if group_sig.verify_signature(EMD, CERT["SD"]):
+        print("Verification succeed")
+    else:
+        print("Verification faied")
 
 if __name__ == "__main__":
-    main()
+    verify()
