@@ -123,7 +123,7 @@ contract_abi = [
 	}
 ]
   # Contract ABI (from compilation)
-contract_address = "0x8f0dDb7221C0F43FB5FA3098825eE5cB6E19EBc3"  # Example address
+contract_address = "0x8f0dDb7221C0F43FB5FA3098825eE5cB6E19EBc3"  
 
 # Initialize the contract instance
 contract = w3.eth.contract(address=contract_address, abi=contract_abi)
